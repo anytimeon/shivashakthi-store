@@ -1,192 +1,174 @@
 from flask import Flask, render_template_string, request, session, redirect
-import random, os
+import os
 
 app = Flask(__name__)
-app.secret_key = "casva_brand_123"
+app.secret_key = "casva_pro_123"
 
 UPI_ID = "princeveguru@ibl"
-BRAND = "CASVA"
 
 # ---------------- PRODUCTS ----------------
 products = [
-    {"id": 1, "name": "Swarovski Beads", "price": 500},
-    {"id": 2, "name": "Monalisa Beads", "price": 150},
-    {"id": 3, "name": "Hydra Beads", "price": 300},
+    {"id": 1, "name": "Swarovski Premium Beads", "price": 500},
+    {"id": 2, "name": "Monalisa Designer Beads", "price": 150},
+    {"id": 3, "name": "Hydra Crystal Beads", "price": 300},
+    {"id": 4, "name": "Pearl Luxury Beads", "price": 200},
 ]
 
-# ---------------- STYLE BASE ----------------
+# ---------------- STYLE ----------------
 STYLE = """
 <style>
 body{
 margin:0;
 font-family:Arial;
-background:url('https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0') no-repeat center;
-background-size:cover;
+background:#0b0f19;
 color:white;
 }
 
-.overlay{
-background:rgba(0,0,0,0.75);
-min-height:100vh;
-padding:20px;
-}
-
-.logo{
-font-size:32px;
+.header{
+background:linear-gradient(90deg,#ffcc00,#ff6600);
+padding:15px;
+text-align:center;
+font-size:28px;
 font-weight:bold;
-color:gold;
-text-align:center;
-padding:10px;
-text-shadow:0 0 10px gold;
+color:black;
 }
 
-.card{
-background:rgba(255,255,255,0.1);
-padding:10px;
-margin:10px;
-border-radius:15px;
+.banner{
+background:url('https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0') center;
+background-size:cover;
+padding:60px 20px;
 text-align:center;
-box-shadow:0 0 10px cyan;
 }
 
-button{
-padding:10px 15px;
-margin:5px;
+.banner h1{
+font-size:40px;
+text-shadow:0 0 10px black;
+}
+
+.btn{
+padding:12px 18px;
+margin:6px;
 border:none;
 border-radius:10px;
-background:cyan;
+background:#00e5ff;
+color:black;
 font-weight:bold;
 cursor:pointer;
 }
 
-button:hover{
-background:gold;
+.btn:hover{
+background:#ffd700;
+}
+
+.container{
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+gap:15px;
+padding:20px;
+}
+
+.card{
+width:200px;
+background:#151b2e;
+border-radius:15px;
+padding:10px;
+text-align:center;
+box-shadow:0 0 10px #00e5ff33;
+transition:0.3s;
+}
+
+.card:hover{
+transform:scale(1.05);
+box-shadow:0 0 15px #00e5ff;
+}
+
+.price{
+color:#ffd700;
+font-weight:bold;
+}
+
+.footer{
+text-align:center;
+padding:10px;
+color:#aaa;
 }
 </style>
 """
 
-# ---------------- LOGIN ----------------
-LOGIN = STYLE + """
-<div class="overlay">
-<div class="logo">💎 CASVA</div>
-
-<h2 style="text-align:center">Login</h2>
-
-<form method="POST" action="/send_otp" style="text-align:center">
-<input name="mobile" placeholder="Enter Mobile Number" style="padding:10px;border-radius:8px;border:none">
-<br><br>
-<button>Send OTP</button>
-</form>
-
-</div>
-"""
-
-# ---------------- OTP ----------------
-OTP = STYLE + """
-<div class="overlay">
-<div class="logo">💎 CASVA</div>
-
-<h3 style="text-align:center">OTP sent to {{mobile}}</h3>
-
-<form method="POST" action="/verify" style="text-align:center">
-<input name="otp" placeholder="Enter OTP" style="padding:10px;border-radius:8px;border:none">
-<br><br>
-<button>Verify</button>
-</form>
-
-</div>
-"""
-
 # ---------------- HOME ----------------
 HOME = STYLE + """
-<div class="overlay">
+<div class="header">💎 CASVA BEADS STORE</div>
 
-<div class="logo">💎 CASVA</div>
-
-<h2 style="text-align:center">Welcome to CASVA Beads</h2>
-<p style="text-align:center">Premium Jewellery & Beads Brand</p>
-
-<div style="text-align:center">
-<a href="/shop"><button>Enter Shop</button></a>
-<a href="/cart"><button>Cart</button></a>
+<div class="banner">
+<h1>Premium Beads Collection</h1>
+<p>Luxury • Style • Creativity</p>
+<a href="/shop"><button class="btn">Shop Now</button></a>
+<a href="/cart"><button class="btn">Cart 🛒</button></a>
 </div>
 
-</div>
+<div class="footer">CASVA © All Rights Reserved</div>
 """
 
 # ---------------- SHOP ----------------
 SHOP = STYLE + """
-<div class="overlay">
+<div class="header">💎 CASVA COLLECTION</div>
 
-<div class="logo">💎 CASVA COLLECTION</div>
-
-<div style="display:flex;flex-wrap:wrap;justify-content:center">
+<div class="container">
 
 {% for p in products %}
-<div class="card" style="width:200px">
+<div class="card">
 <h3>{{p.name}}</h3>
-<p>₹{{p.price}}</p>
-<a href="/add/{{p.id}}"><button>Add</button></a>
+<p class="price">₹{{p.price}}</p>
+<a href="/add/{{p.id}}"><button class="btn">Add to Cart</button></a>
 </div>
 {% endfor %}
 
 </div>
 
 <div style="text-align:center">
-<a href="/cart"><button>Go to Cart</button></a>
-</div>
-
+<a href="/cart"><button class="btn">Go to Cart 🛒</button></a>
 </div>
 """
 
 # ---------------- CART ----------------
 CART = STYLE + """
-<div class="overlay">
+<div class="header">🛒 CASVA CART</div>
 
-<div class="logo">💎 CASVA CART</div>
-
-<div style="text-align:center">
+<div style="text-align:center;padding:20px">
 
 {% for i in items %}
-<p>{{i.name}} - ₹{{i.price}}</p>
+<p>📿 {{i.name}} - ₹{{i.price}}</p>
 {% endfor %}
 
-<h3>Total: ₹{{total}}</h3>
+<h2>Total: ₹{{total}}</h2>
 
 <a href="upi://pay?pa={{upi}}&pn=CASVA&am={{total}}&cu=INR">
-<button>Pay Now</button>
+<button class="btn">💳 Pay Now</button>
 </a>
 
-</div>
+<br><br>
+<a href="/success"><button class="btn">✔ Place Order</button></a>
 
+</div>
+"""
+
+# ---------------- SUCCESS ----------------
+SUCCESS = STYLE + """
+<div class="header">🎉 ORDER SUCCESS</div>
+
+<div style="text-align:center;padding:30px">
+<h2>Thank you for shopping at CASVA 💎</h2>
+
+<a href="https://wa.me/91XXXXXXXXXX?text=I%20ordered%20from%20CASVA">
+<button class="btn">📲 WhatsApp Us</button>
+</a>
 </div>
 """
 
 # ---------------- ROUTES ----------------
 @app.route("/")
-def login():
-    return render_template_string(LOGIN)
-
-@app.route("/send_otp", methods=["POST"])
-def send_otp():
-    mobile = request.form["mobile"]
-    otp = str(random.randint(1000,9999))
-    session["otp"] = otp
-    session["mobile"] = mobile
-    print("OTP:", otp)
-    return render_template_string(OTP, mobile=mobile)
-
-@app.route("/verify", methods=["POST"])
-def verify():
-    if request.form["otp"] == session.get("otp"):
-        session["logged"] = True
-        return redirect("/home")
-    return "Wrong OTP"
-
-@app.route("/home")
 def home():
-    if not session.get("logged"):
-        return redirect("/")
     return render_template_string(HOME)
 
 @app.route("/shop")
@@ -213,6 +195,11 @@ def cart():
                 total += p["price"]
 
     return render_template_string(CART, items=items, total=total, upi=UPI_ID)
+
+@app.route("/success")
+def success():
+    session["cart"] = []
+    return render_template_string(SUCCESS)
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
