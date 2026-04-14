@@ -1,170 +1,156 @@
 from flask import Flask, render_template_string, request, session, redirect
+import sqlite3
 import os
 
 app = Flask(__name__)
-app.secret_key = "casva_pro_123"
+app.secret_key = "kaswa_final_secret"
 
 UPI_ID = "princeveguru@ibl"
 
-# ---------------- PRODUCTS ----------------
-products = [
-    {"id": 1, "name": "Swarovski Premium Beads", "price": 500},
-    {"id": 2, "name": "Monalisa Designer Beads", "price": 150},
-    {"id": 3, "name": "Hydra Crystal Beads", "price": 300},
-    {"id": 4, "name": "Pearl Luxury Beads", "price": 200},
-]
+# ---------------- DATABASE ----------------
+def init_db():
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        password TEXT
+    )
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS products(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        price INTEGER,
+        image TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # ---------------- STYLE ----------------
 STYLE = """
 <style>
-body{
-margin:0;
-font-family:Arial;
-background:#0b0f19;
-color:white;
-}
+body{margin:0;font-family:Arial;background:#0f172a;color:white}
 
-.header{
-background:linear-gradient(90deg,#ffcc00,#ff6600);
-padding:15px;
-text-align:center;
-font-size:28px;
-font-weight:bold;
-color:black;
-}
+.nav{background:#111827;padding:15px;text-align:center;font-size:22px;font-weight:bold;color:gold}
 
-.banner{
-background:url('https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0') center;
-background-size:cover;
-padding:60px 20px;
-text-align:center;
-}
+.container{display:flex;flex-wrap:wrap;justify-content:center;gap:15px;padding:20px}
 
-.banner h1{
-font-size:40px;
-text-shadow:0 0 10px black;
-}
+.card{background:#1f2937;width:200px;padding:10px;border-radius:12px;text-align:center}
 
-.btn{
-padding:12px 18px;
-margin:6px;
-border:none;
-border-radius:10px;
-background:#00e5ff;
-color:black;
-font-weight:bold;
-cursor:pointer;
-}
+.btn{background:#f59e0b;border:none;padding:10px;border-radius:10px;font-weight:bold;cursor:pointer}
 
-.btn:hover{
-background:#ffd700;
-}
+.btn:hover{background:#fbbf24}
 
-.container{
-display:flex;
-flex-wrap:wrap;
-justify-content:center;
-gap:15px;
-padding:20px;
-}
+input{padding:8px;margin:5px;border-radius:8px;border:none;width:80%}
 
-.card{
-width:200px;
-background:#151b2e;
-border-radius:15px;
-padding:10px;
-text-align:center;
-box-shadow:0 0 10px #00e5ff33;
-transition:0.3s;
-}
-
-.card:hover{
-transform:scale(1.05);
-box-shadow:0 0 15px #00e5ff;
-}
-
-.price{
-color:#ffd700;
-font-weight:bold;
-}
-
-.footer{
-text-align:center;
-padding:10px;
-color:#aaa;
-}
+img{width:100%;height:120px;object-fit:cover;border-radius:8px}
 </style>
 """
 
 # ---------------- HOME ----------------
 HOME = STYLE + """
-<div class="header">💎 CASVA BEADS STORE</div>
+<div class="nav">💎 KASWA STORE</div>
 
-<div class="banner">
-<h1>Premium Beads Collection</h1>
-<p>Luxury • Style • Creativity</p>
-<a href="/shop"><button class="btn">Shop Now</button></a>
-<a href="/cart"><button class="btn">Cart 🛒</button></a>
+<div style="text-align:center;padding:40px">
+<h2>Premium Beads Store</h2>
+
+<a href="/shop"><button class="btn">Shop</button></a>
+<a href="/login"><button class="btn">Login</button></a>
+<a href="/admin"><button class="btn">Admin</button></a>
 </div>
-
-<div class="footer">CASVA © All Rights Reserved</div>
 """
 
 # ---------------- SHOP ----------------
 SHOP = STYLE + """
-<div class="header">💎 CASVA COLLECTION</div>
+<div class="nav">🛍️ SHOP</div>
 
 <div class="container">
 
 {% for p in products %}
 <div class="card">
-<h3>{{p.name}}</h3>
-<p class="price">₹{{p.price}}</p>
-<a href="/add/{{p.id}}"><button class="btn">Add to Cart</button></a>
+<img src="{{p[3] if p[3] else 'https://via.placeholder.com/150'}}">
+<h3>{{p[1]}}</h3>
+<p>₹{{p[2]}}</p>
+<a href="/add/{{p[0]}}"><button class="btn">Add</button></a>
 </div>
 {% endfor %}
 
 </div>
 
 <div style="text-align:center">
-<a href="/cart"><button class="btn">Go to Cart 🛒</button></a>
+<a href="/cart"><button class="btn">Cart 🛒</button></a>
 </div>
 """
 
 # ---------------- CART ----------------
 CART = STYLE + """
-<div class="header">🛒 CASVA CART</div>
+<div class="nav">🛒 CART</div>
+
+<div class="container">
+
+{% for i in items %}
+<div class="card">
+<p>{{i[0]}}</p>
+<p>₹{{i[1]}}</p>
+</div>
+{% endfor %}
+
+</div>
+
+<h2 style="text-align:center">Total: ₹{{total}}</h2>
+
+<div style="text-align:center">
+<a href="upi://pay?pa={{upi}}&pn=KASWA&am={{total}}&cu=INR">
+<button class="btn">Pay Now</button>
+</a>
+</div>
+"""
+
+# ---------------- LOGIN ----------------
+LOGIN = STYLE + """
+<div class="nav">🔐 LOGIN</div>
+
+<div style="text-align:center;padding:30px">
+<form method="POST">
+<input name="username" placeholder="Username"><br>
+<input name="password" placeholder="Password"><br>
+<button class="btn">Login</button>
+</form>
+</div>
+"""
+
+# ---------------- ADMIN ----------------
+ADMIN = STYLE + """
+<div class="nav">⚙️ ADMIN PANEL</div>
 
 <div style="text-align:center;padding:20px">
 
-{% for i in items %}
-<p>📿 {{i.name}} - ₹{{i.price}}</p>
+<form method="POST" action="/add_product">
+<input name="name" placeholder="Product Name"><br>
+<input name="price" placeholder="Price"><br>
+<input name="image" placeholder="Image URL (optional)"><br>
+<button class="btn">Add Product</button>
+</form>
+
+<h3>Products</h3>
+
+{% for p in products %}
+<p>{{p[1]}} - ₹{{p[2]}}</p>
 {% endfor %}
 
-<h2>Total: ₹{{total}}</h2>
-
-<a href="upi://pay?pa={{upi}}&pn=CASVA&am={{total}}&cu=INR">
-<button class="btn">💳 Pay Now</button>
-</a>
-
-<br><br>
-<a href="/success"><button class="btn">✔ Place Order</button></a>
-
 </div>
 """
 
-# ---------------- SUCCESS ----------------
-SUCCESS = STYLE + """
-<div class="header">🎉 ORDER SUCCESS</div>
-
-<div style="text-align:center;padding:30px">
-<h2>Thank you for shopping at CASVA 💎</h2>
-
-<a href="https://wa.me/91XXXXXXXXXX?text=I%20ordered%20from%20CASVA">
-<button class="btn">📲 WhatsApp Us</button>
-</a>
-</div>
-"""
+# ---------------- CART STORAGE ----------------
+cart = []
 
 # ---------------- ROUTES ----------------
 @app.route("/")
@@ -173,35 +159,81 @@ def home():
 
 @app.route("/shop")
 def shop():
-    return render_template_string(SHOP, products=products)
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM products")
+    data = c.fetchall()
+    conn.close()
+    return render_template_string(SHOP, products=data)
 
 @app.route("/add/<int:id>")
 def add(id):
-    if "cart" not in session:
-        session["cart"] = []
-    session["cart"].append(id)
-    session.modified = True
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("SELECT name,price FROM products WHERE id=?", (id,))
+    item = c.fetchone()
+    conn.close()
+
+    if item:
+        cart.append(item)
+
     return redirect("/shop")
 
 @app.route("/cart")
-def cart():
-    items = []
-    total = 0
+def cart_view():
+    total = sum(i[1] for i in cart)
+    return render_template_string(CART, items=cart, total=total, upi=UPI_ID)
 
-    for cid in session.get("cart", []):
-        for p in products:
-            if p["id"] == cid:
-                items.append(p)
-                total += p["price"]
+# ---------------- LOGIN ----------------
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        conn = sqlite3.connect("kaswa.db")
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=? AND password=?",
+                  (request.form["username"], request.form["password"]))
+        user = c.fetchone()
+        conn.close()
 
-    return render_template_string(CART, items=items, total=total, upi=UPI_ID)
+        if user:
+            session["user"] = user[1]
+            return redirect("/admin")
 
-@app.route("/success")
-def success():
-    session["cart"] = []
-    return render_template_string(SUCCESS)
+    return render_template_string(LOGIN)
 
-# ---------------- RUN ----------------
+# ---------------- ADMIN ----------------
+@app.route("/admin")
+def admin():
+    if not session.get("user"):
+        return redirect("/login")
+
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM products")
+    data = c.fetchall()
+    conn.close()
+
+    return render_template_string(ADMIN, products=data)
+
+@app.route("/add_product", methods=["POST"])
+def add_product():
+    if not session.get("user"):
+        return redirect("/login")
+
+    name = request.form["name"]
+    price = request.form["price"]
+    image = request.form["image"]
+
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO products(name,price,image) VALUES(?,?,?)",
+              (name, price, image))
+    conn.commit()
+    conn.close()
+
+    return redirect("/admin")
+
+# ---------------- RUN (IMPORTANT FOR RENDER) ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
