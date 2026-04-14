@@ -1,9 +1,8 @@
 from flask import Flask, render_template_string, request, session, redirect
-import sqlite3
-import os
+import sqlite3, os, uuid
 
 app = Flask(__name__)
-app.secret_key = "kaswa_final_secret"
+app.secret_key = "kaswa_pro_max_full"
 
 UPI_ID = "princeveguru@ibl"
 
@@ -29,42 +28,115 @@ def init_db():
     )
     """)
 
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS orders(
+        id TEXT PRIMARY KEY,
+        username TEXT,
+        items TEXT,
+        total INTEGER,
+        status TEXT,
+        lat REAL,
+        lng REAL
+    )
+    """)
+
     conn.commit()
     conn.close()
 
 init_db()
 
-# ---------------- STYLE ----------------
+# ---------------- STYLE (AMAZON + FLIPKART HYBRID) ----------------
 STYLE = """
 <style>
-body{margin:0;font-family:Arial;background:#0f172a;color:white}
+body{margin:0;font-family:Arial;background:#f1f3f6}
 
-.nav{background:#111827;padding:15px;text-align:center;font-size:22px;font-weight:bold;color:gold}
+/* AMAZON TOP BAR */
+.nav{
+background:#131921;
+color:white;
+padding:15px;
+text-align:center;
+font-size:22px;
+font-weight:bold;
+}
 
-.container{display:flex;flex-wrap:wrap;justify-content:center;gap:15px;padding:20px}
+/* FLIPKART SUB BAR */
+.subnav{
+background:#2874f0;
+color:white;
+padding:10px;
+text-align:center;
+}
 
-.card{background:#1f2937;width:200px;padding:10px;border-radius:12px;text-align:center}
+/* SEARCH */
+.search{
+text-align:center;
+padding:10px;
+background:white;
+}
+.search input{
+width:70%;
+padding:10px;
+border-radius:6px;
+border:1px solid #ccc;
+}
 
-.btn{background:#f59e0b;border:none;padding:10px;border-radius:10px;font-weight:bold;cursor:pointer}
+/* PRODUCTS */
+.container{
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+gap:15px;
+padding:15px;
+}
 
-.btn:hover{background:#fbbf24}
+.card{
+background:white;
+width:180px;
+padding:10px;
+border-radius:10px;
+text-align:center;
+box-shadow:0 0 6px rgba(0,0,0,0.1);
+}
 
-input{padding:8px;margin:5px;border-radius:8px;border:none;width:80%}
+.card:hover{transform:scale(1.03);transition:0.2s}
 
-img{width:100%;height:120px;object-fit:cover;border-radius:8px}
+.btn{
+background:#ff9f00;
+border:none;
+padding:8px;
+border-radius:6px;
+font-weight:bold;
+cursor:pointer;
+width:100%;
+}
+
+.btn:hover{background:#fb641b}
+
+img{
+width:100%;
+height:120px;
+object-fit:cover;
+border-radius:8px;
+}
 </style>
 """
 
 # ---------------- HOME ----------------
 HOME = STYLE + """
-<div class="nav">💎 KASWA STORE</div>
+<div class="nav">💎 KASWA PRO MAX STORE</div>
+<div class="subnav">Amazon Reliability • Flipkart Offers • Beads Store</div>
 
-<div style="text-align:center;padding:40px">
-<h2>Premium Beads Store</h2>
+<div class="search">
+<input placeholder="Search products...">
+</div>
 
-<a href="/shop"><button class="btn">Shop</button></a>
-<a href="/login"><button class="btn">Login</button></a>
-<a href="/admin"><button class="btn">Admin</button></a>
+<div style="text-align:center;padding:30px">
+<h2>Welcome to KASWA</h2>
+<p>Premium Beads • Jewellery • Handmade Products</p>
+
+<a href="/shop"><button class="btn">Start Shopping</button></a>
+<a href="/orders"><button class="btn">Track Orders 🚚</button></a>
 </div>
 """
 
@@ -72,21 +144,25 @@ HOME = STYLE + """
 SHOP = STYLE + """
 <div class="nav">🛍️ SHOP</div>
 
+<div class="search">
+<input placeholder="Search beads...">
+</div>
+
 <div class="container">
 
 {% for p in products %}
 <div class="card">
-<img src="{{p[3] if p[3] else 'https://via.placeholder.com/150'}}">
+<img src="{{p[3]}}">
 <h3>{{p[1]}}</h3>
-<p>₹{{p[2]}}</p>
-<a href="/add/{{p[0]}}"><button class="btn">Add</button></a>
+<p style="color:green;font-weight:bold">₹{{p[2]}}</p>
+<a href="/add/{{p[0]}}"><button class="btn">Add to Cart</button></a>
 </div>
 {% endfor %}
 
 </div>
 
 <div style="text-align:center">
-<a href="/cart"><button class="btn">Cart 🛒</button></a>
+<a href="/cart"><button class="btn">Go to Cart 🛒</button></a>
 </div>
 """
 
@@ -108,48 +184,62 @@ CART = STYLE + """
 <h2 style="text-align:center">Total: ₹{{total}}</h2>
 
 <div style="text-align:center">
+<a href="/checkout"><button class="btn">Checkout</button></a>
+</div>
+"""
+
+# ---------------- CHECKOUT ----------------
+CHECKOUT = STYLE + """
+<div class="nav">💳 PAYMENT</div>
+
+<div style="text-align:center;padding:20px">
+<h2>Total: ₹{{total}}</h2>
+
 <a href="upi://pay?pa={{upi}}&pn=KASWA&am={{total}}&cu=INR">
 <button class="btn">Pay Now</button>
 </a>
 </div>
 """
 
-# ---------------- LOGIN ----------------
-LOGIN = STYLE + """
-<div class="nav">🔐 LOGIN</div>
+# ---------------- ORDERS ----------------
+ORDERS = STYLE + """
+<div class="nav">🚚 ORDER TRACKING</div>
 
-<div style="text-align:center;padding:30px">
-<form method="POST">
-<input name="username" placeholder="Username"><br>
-<input name="password" placeholder="Password"><br>
-<button class="btn">Login</button>
-</form>
+<div class="container">
+
+{% for o in orders %}
+<div class="card">
+<h3>Order ID</h3>
+<p>{{o[0]}}</p>
+
+<p><b>Status:</b> {{o[4]}}</p>
+<p><b>Total:</b> ₹{{o[3]}}</p>
+
+<a href="/track/{{o[0]}}">
+<button class="btn">Track Map</button>
+</a>
 </div>
-"""
-
-# ---------------- ADMIN ----------------
-ADMIN = STYLE + """
-<div class="nav">⚙️ ADMIN PANEL</div>
-
-<div style="text-align:center;padding:20px">
-
-<form method="POST" action="/add_product">
-<input name="name" placeholder="Product Name"><br>
-<input name="price" placeholder="Price"><br>
-<input name="image" placeholder="Image URL (optional)"><br>
-<button class="btn">Add Product</button>
-</form>
-
-<h3>Products</h3>
-
-{% for p in products %}
-<p>{{p[1]}} - ₹{{p[2]}}</p>
 {% endfor %}
 
 </div>
 """
 
-# ---------------- CART STORAGE ----------------
+# ---------------- TRACK MAP ----------------
+TRACK = STYLE + """
+<div class="nav">📍 LIVE DELIVERY TRACKING</div>
+
+<h3 style="text-align:center">Status: {{order[4]}}</h3>
+
+<iframe width="100%" height="400"
+src="https://www.openstreetmap.org/export/embed.html?bbox={{order[6]-0.01}}%2C{{order[5]-0.01}}%2C{{order[6]+0.01}}%2C{{order[5]+0.01}}&layer=mapnik">
+</iframe>
+
+<div style="text-align:center">
+<a href="/orders"><button class="btn">Back</button></a>
+</div>
+"""
+
+# ---------------- CART ----------------
 cart = []
 
 # ---------------- ROUTES ----------------
@@ -173,67 +263,51 @@ def add(id):
     c.execute("SELECT name,price FROM products WHERE id=?", (id,))
     item = c.fetchone()
     conn.close()
-
-    if item:
-        cart.append(item)
-
+    cart.append(item)
     return redirect("/shop")
 
 @app.route("/cart")
 def cart_view():
     total = sum(i[1] for i in cart)
-    return render_template_string(CART, items=cart, total=total, upi=UPI_ID)
+    return render_template_string(CART, items=cart, total=total)
 
-# ---------------- LOGIN ----------------
-@app.route("/login", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        conn = sqlite3.connect("kaswa.db")
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=? AND password=?",
-                  (request.form["username"], request.form["password"]))
-        user = c.fetchone()
-        conn.close()
-
-        if user:
-            session["user"] = user[1]
-            return redirect("/admin")
-
-    return render_template_string(LOGIN)
-
-# ---------------- ADMIN ----------------
-@app.route("/admin")
-def admin():
-    if not session.get("user"):
-        return redirect("/login")
+@app.route("/checkout")
+def checkout():
+    total = sum(i[1] for i in cart)
+    order_id = str(uuid.uuid4())[:8]
 
     conn = sqlite3.connect("kaswa.db")
     c = conn.cursor()
-    c.execute("SELECT * FROM products")
-    data = c.fetchall()
-    conn.close()
-
-    return render_template_string(ADMIN, products=data)
-
-@app.route("/add_product", methods=["POST"])
-def add_product():
-    if not session.get("user"):
-        return redirect("/login")
-
-    name = request.form["name"]
-    price = request.form["price"]
-    image = request.form["image"]
-
-    conn = sqlite3.connect("kaswa.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO products(name,price,image) VALUES(?,?,?)",
-              (name, price, image))
+    c.execute("""
+    INSERT INTO orders VALUES (?,?,?,?,?,?,?)
+    """, (order_id, "user", str(cart), total, "Processing", 12.9716, 77.5946))
     conn.commit()
     conn.close()
 
-    return redirect("/admin")
+    cart.clear()
 
-# ---------------- RUN (IMPORTANT FOR RENDER) ----------------
+    return render_template_string(CHECKOUT, total=total, upi=UPI_ID)
+
+@app.route("/orders")
+def orders():
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM orders")
+    data = c.fetchall()
+    conn.close()
+    return render_template_string(ORDERS, orders=data)
+
+@app.route("/track/<order_id>")
+def track(order_id):
+    conn = sqlite3.connect("kaswa.db")
+    c = conn.cursor()
+    c.execute("SELECT * FROM orders WHERE id=?", (order_id,))
+    order = c.fetchone()
+    conn.close()
+
+    return render_template_string(TRACK, order=order)
+
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
